@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sequoia 2025 Camping Trip</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 700px;
+      margin: 40px auto;
+      padding: 20px;
+      border: 1px solid #ccc;
+      border-radius: 12px;
+    }
+    h1 {
+      text-align: center;
+    }
+    ul {
+      padding-left: 20px;
+    }
+    button {
+      margin-left: 10px;
+    }
+    input[type="text"] {
+      margin-right: 10px;
+    }
+    .section {
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Sequoia 2025 Camping Trip</h1>
+
+  <div class="section">
+    <h2>Trip Plan</h2>
+    <p><strong>Campground:</strong> <a href="https://www.nps.gov/seki/planyourvisit/azalea.htm" target="_blank">Azalea @ Sequoia & Kings Canyon National Park</a><br>
+       <strong>Sites:</strong> 30, 32 already reserved ✅<br>
+       <strong>Plan:</strong><br>
+       Leave Fri morning Sep 26, back Sunday evening Sep 28.<br>
+       Check-in: Fri Sep 26 noon<br>
+       Checkout: Sun Sep 28 noon
+    </p>
+  </div>
+
+  <p><strong>Total Spots:</strong> 12<br>
+     <strong>Spots Taken:</strong> <span id="taken-count">1</span><br>
+     <strong>Spots Remaining:</strong> <span id="remaining-count">11</span>
+  </p>
+
+  <div class="section">
+    <h2>Confirmed Attendees</h2>
+    <ul id="confirmed"></ul>
+    <input type="text" id="newConfirmedName" placeholder="New attendee name">
+    <input type="text" id="newConfirmedPassword" placeholder="Password">
+    <input type="text" id="referrerName" placeholder="Referred by (optional)">
+    <button onclick="addConfirmed()">Signup</button>
+  </div>
+
+  <div class="section">
+    <h2>Reserve a spot for a friend(s)</h2>
+    <input type="text" id="reserverName" placeholder="Your (confirmed) name">
+    <input type="text" id="reserverPassword" placeholder="Password">
+    <button onclick="reserveSpot()">Reserve a Spot</button>
+    <ul id="reserved"></ul>
+  </div>
+
+  <script>
+    const maxSpots = 12;
+    let confirmedList = [{ name: "Kowshik", password: "admin123" }];
+    let reservedSpots = [];
+    const adminPassword = "admin123";
+
+    function updateCounts() {
+      document.getElementById('taken-count').textContent = confirmedList.length;
+      document.getElementById('remaining-count').textContent = maxSpots - confirmedList.length - reservedSpots.length;
+    }
+
+    function renderConfirmed() {
+      const ul = document.getElementById("confirmed");
+      ul.innerHTML = '';
+      confirmedList.forEach(({ name }) => {
+        const li = document.createElement("li");
+        const count = reservedSpots.filter(r => r.by === name).length;
+        li.textContent = `${name} ${count ? `(Reserving ${count})` : ''}`;
+        const removeBtn = document.createElement("button");
+        removeBtn.textContent = "Remove";
+        removeBtn.onclick = () => {
+          const pw = prompt("Enter password (or admin password):");
+          const user = confirmedList.find(u => u.name === name);
+          if (pw === user.password || pw === adminPassword) {
+            confirmedList = confirmedList.filter(u => u.name !== name);
+            reservedSpots = reservedSpots.filter(r => r.by !== name);
+            renderConfirmed();
+            renderReserved();
+            updateCounts();
+          } else {
+            alert("Incorrect password.");
+          }
+        };
+        li.appendChild(removeBtn);
+        ul.appendChild(li);
+      });
+    }
+
+    function addConfirmed() {
+      const name = document.getElementById("newConfirmedName").value.trim();
+      const pw = document.getElementById("newConfirmedPassword").value.trim();
+      const ref = document.getElementById("referrerName").value.trim();
+      if (!name || !pw) return alert("Enter name and password.");
+      if (confirmedList.find(u => u.name === name)) return alert("Already signed up.");
+      if (ref) {
+        const refIndex = reservedSpots.findIndex(r => r.by === ref);
+        if (refIndex === -1) return alert("Referrer has no reserved spots.");
+        reservedSpots.splice(refIndex, 1);
+      } else {
+        if (confirmedList.length + reservedSpots.length >= maxSpots) return alert("No spots left.");
+      }
+      confirmedList.push({ name, password: pw });
+      document.getElementById("newConfirmedName").value = "";
+      document.getElementById("newConfirmedPassword").value = "";
+      document.getElementById("referrerName").value = "";
+      renderConfirmed();
+      renderReserved();
+      updateCounts();
+    }
+
+    function reserveSpot() {
+      const name = document.getElementById("reserverName").value.trim();
+      const pw = document.getElementById("reserverPassword").value.trim();
+      const user = confirmedList.find(u => u.name === name);
+      if (!user) return alert("You must be a confirmed attendee.");
+      if (user.password !== pw && pw !== adminPassword) return alert("Incorrect password.");
+      if (confirmedList.length + reservedSpots.length >= maxSpots) return alert("No remaining spots to reserve.");
+      reservedSpots.push({ id: Date.now(), by: name });
+      renderConfirmed();
+      renderReserved();
+      updateCounts();
+    }
+
+    function releaseSpot(id, by) {
+      const pw = prompt("Enter password (or admin password):");
+      const user = confirmedList.find(u => u.name === by);
+      if (pw === user?.password || pw === adminPassword) {
+        reservedSpots = reservedSpots.filter(r => r.id !== id);
+        renderConfirmed();
+        renderReserved();
+        updateCounts();
+      } else {
+        alert("Incorrect password.");
+      }
+    }
+
+    function renderReserved() {
+      const ul = document.getElementById("reserved");
+      ul.innerHTML = '';
+      reservedSpots.forEach(entry => {
+        const li = document.createElement("li");
+        li.innerHTML = `Reserved by <strong>${entry.by}</strong> <button onclick="releaseSpot(${entry.id}, '${entry.by}')">Release</button>`;
+        ul.appendChild(li);
+      });
+    }
+
+    renderConfirmed();
+    renderReserved();
+    updateCounts();
+  </script>
+</body>
+</html>
