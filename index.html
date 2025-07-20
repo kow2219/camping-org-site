@@ -29,6 +29,22 @@
       margin-bottom: 20px;
     }
   </style>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+    import { getFirestore, doc, setDoc, getDoc, collection, getDocs, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBjVDRsFLVowGVt3ZgLFzm7oZSdDORDSpI",
+      authDomain: "camping-signup-site.firebaseapp.com",
+      projectId: "camping-signup-site",
+      storageBucket: "camping-signup-site.appspot.com",
+      messagingSenderId: "216033971506",
+      appId: "1:216033971506:web:8dae48072b91879aec9b2b"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+  </script>
 </head>
 <body>
   <h1>Sequoia 2025 Camping Trip</h1>
@@ -66,6 +82,7 @@
     <ul id="reserved"></ul>
   </div>
 
+  <!-- The logic below remains untouched and will be upgraded in next step to use Firestore -->
   <script>
     const maxSpots = 12;
     let confirmedList = [{ name: "Kowshik", password: "admin123" }];
@@ -168,3 +185,4 @@
   </script>
 </body>
 </html>
+
