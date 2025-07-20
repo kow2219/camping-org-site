@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Sequoia 2025 Camping Trip</title>
   <style>
     body {
@@ -31,7 +31,7 @@
   </style>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDoc, collection, getDocs, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+    import { getFirestore, collection, getDocs, setDoc, doc, addDoc, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBjVDRsFLVowGVt3ZgLFzm7oZSdDORDSpI",
@@ -44,6 +44,127 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+
+    const confirmedCol = collection(db, "confirmed");
+    const reservedCol = collection(db, "reserved");
+
+    const adminPassword = "admin123";
+    const maxSpots = 12;
+    let confirmedList = [];
+    let reservedSpots = [];
+
+    async function loadData() {
+      console.log("Loading data...");
+      try {
+        confirmedList = [];
+        reservedSpots = [];
+        const confirmedSnap = await getDocs(confirmedCol);
+        console.log("Confirmed docs count:", confirmedSnap.size);
+        confirmedSnap.forEach(doc => confirmedList.push(doc.data()));
+        const reservedSnap = await getDocs(reservedCol);
+        console.log("Reserved docs count:", reservedSnap.size);
+        reservedSnap.forEach(doc => reservedSpots.push({ ...doc.data(), id: doc.id }));
+        console.log("Data loaded, rendering UI");
+        renderConfirmed();
+        renderReserved();
+        updateCounts();
+      } catch (e) {
+        console.error("Error loading data:", e);
+      }
+    }
+
+    async function ensureKowshikInitial() {
+      console.log("Running ensureKowshikInitial");
+      await setDoc(doc(confirmedCol, "Kowshik"), { name: "Kowshik", password: adminPassword });
+      console.log("Kowshik doc ensured");
+    }
+
+    function updateCounts() {
+      document.getElementById('taken-count').textContent = confirmedList.length;
+      document.getElementById('remaining-count').textContent = maxSpots - confirmedList.length - reservedSpots.length;
+    }
+
+    function renderConfirmed() {
+      const ul = document.getElementById("confirmed");
+      ul.innerHTML = '';
+      confirmedList.forEach(({ name }) => {
+        const li = document.createElement("li");
+        const count = reservedSpots.filter(r => r.by === name).length;
+        li.textContent = `${name} ${count ? `(Reserving ${count})` : ''}`;
+        const removeBtn = document.createElement("button");
+        removeBtn.textContent = "Remove";
+        removeBtn.onclick = async () => {
+          const pw = prompt("Enter password (or admin password):");
+          const user = confirmedList.find(u => u.name === name);
+          if (pw === user?.password || pw === adminPassword) {
+            await deleteDoc(doc(confirmedCol, name));
+            const toRemove = reservedSpots.filter(r => r.by === name);
+            for (const r of toRemove) await deleteDoc(doc(reservedCol, r.id));
+            await loadData();
+          } else {
+            alert("Incorrect password.");
+          }
+        };
+        li.appendChild(removeBtn);
+        ul.appendChild(li);
+      });
+    }
+
+    function renderReserved() {
+      const ul = document.getElementById("reserved");
+      ul.innerHTML = '';
+      reservedSpots.forEach(entry => {
+        const li = document.createElement("li");
+        li.innerHTML = `Reserved by <strong>${entry.by}</strong> <button onclick="releaseSpot('${entry.id}', '${entry.by}')">Release</button>`;
+        ul.appendChild(li);
+      });
+    }
+
+    window.addConfirmed = async function addConfirmed() {
+      const name = document.getElementById("newConfirmedName").value.trim();
+      const pw = document.getElementById("newConfirmedPassword").value.trim();
+      const ref = document.getElementById("referrerName").value.trim();
+      if (!name || !pw) return alert("Enter name and password.");
+      if (confirmedList.find(u => u.name === name)) return alert("Already signed up.");
+      if (ref) {
+        const refEntry = reservedSpots.find(r => r.by === ref);
+        if (!refEntry) return alert("Referrer has no reserved spots.");
+        await deleteDoc(doc(reservedCol, refEntry.id));
+      } else {
+        if (confirmedList.length + reservedSpots.length >= maxSpots) return alert("No spots left.");
+      }
+      await setDoc(doc(confirmedCol, name), { name, password: pw });
+      document.getElementById("newConfirmedName").value = "";
+      document.getElementById("newConfirmedPassword").value = "";
+      document.getElementById("referrerName").value = "";
+      await loadData();
+    };
+
+    window.reserveSpot = async function reserveSpot() {
+      const name = document.getElementById("reserverName").value.trim();
+      const pw = document.getElementById("reserverPassword").value.trim();
+      const user = confirmedList.find(u => u.name === name);
+      if (!user) return alert("You must be a confirmed attendee.");
+      if (user.password !== pw && pw !== adminPassword) return alert("Incorrect password.");
+      if (confirmedList.length + reservedSpots.length >= maxSpots) return alert("No remaining spots to reserve.");
+      await addDoc(reservedCol, { by: name });
+      document.getElementById("reserverName").value = "";
+      document.getElementById("reserverPassword").value = "";
+      await loadData();
+    };
+
+    window.releaseSpot = async function releaseSpot(id, by) {
+      const pw = prompt("Enter password (or admin password):");
+      const user = confirmedList.find(u => u.name === by);
+      if (pw === user?.password || pw === adminPassword) {
+        await deleteDoc(doc(reservedCol, id));
+        await loadData();
+      } else {
+        alert("Incorrect password.");
+      }
+    };
+
+    ensureKowshikInitial().then(loadData);
   </script>
 </head>
 <body>
@@ -81,108 +202,6 @@
     <button onclick="reserveSpot()">Reserve a Spot</button>
     <ul id="reserved"></ul>
   </div>
-
-  <!-- The logic below remains untouched and will be upgraded in next step to use Firestore -->
-  <script>
-    const maxSpots = 12;
-    let confirmedList = [{ name: "Kowshik", password: "admin123" }];
-    let reservedSpots = [];
-    const adminPassword = "admin123";
-
-    function updateCounts() {
-      document.getElementById('taken-count').textContent = confirmedList.length;
-      document.getElementById('remaining-count').textContent = maxSpots - confirmedList.length - reservedSpots.length;
-    }
-
-    function renderConfirmed() {
-      const ul = document.getElementById("confirmed");
-      ul.innerHTML = '';
-      confirmedList.forEach(({ name }) => {
-        const li = document.createElement("li");
-        const count = reservedSpots.filter(r => r.by === name).length;
-        li.textContent = `${name} ${count ? `(Reserving ${count})` : ''}`;
-        const removeBtn = document.createElement("button");
-        removeBtn.textContent = "Remove";
-        removeBtn.onclick = () => {
-          const pw = prompt("Enter password (or admin password):");
-          const user = confirmedList.find(u => u.name === name);
-          if (pw === user.password || pw === adminPassword) {
-            confirmedList = confirmedList.filter(u => u.name !== name);
-            reservedSpots = reservedSpots.filter(r => r.by !== name);
-            renderConfirmed();
-            renderReserved();
-            updateCounts();
-          } else {
-            alert("Incorrect password.");
-          }
-        };
-        li.appendChild(removeBtn);
-        ul.appendChild(li);
-      });
-    }
-
-    function addConfirmed() {
-      const name = document.getElementById("newConfirmedName").value.trim();
-      const pw = document.getElementById("newConfirmedPassword").value.trim();
-      const ref = document.getElementById("referrerName").value.trim();
-      if (!name || !pw) return alert("Enter name and password.");
-      if (confirmedList.find(u => u.name === name)) return alert("Already signed up.");
-      if (ref) {
-        const refIndex = reservedSpots.findIndex(r => r.by === ref);
-        if (refIndex === -1) return alert("Referrer has no reserved spots.");
-        reservedSpots.splice(refIndex, 1);
-      } else {
-        if (confirmedList.length + reservedSpots.length >= maxSpots) return alert("No spots left.");
-      }
-      confirmedList.push({ name, password: pw });
-      document.getElementById("newConfirmedName").value = "";
-      document.getElementById("newConfirmedPassword").value = "";
-      document.getElementById("referrerName").value = "";
-      renderConfirmed();
-      renderReserved();
-      updateCounts();
-    }
-
-    function reserveSpot() {
-      const name = document.getElementById("reserverName").value.trim();
-      const pw = document.getElementById("reserverPassword").value.trim();
-      const user = confirmedList.find(u => u.name === name);
-      if (!user) return alert("You must be a confirmed attendee.");
-      if (user.password !== pw && pw !== adminPassword) return alert("Incorrect password.");
-      if (confirmedList.length + reservedSpots.length >= maxSpots) return alert("No remaining spots to reserve.");
-      reservedSpots.push({ id: Date.now(), by: name });
-      renderConfirmed();
-      renderReserved();
-      updateCounts();
-    }
-
-    function releaseSpot(id, by) {
-      const pw = prompt("Enter password (or admin password):");
-      const user = confirmedList.find(u => u.name === by);
-      if (pw === user?.password || pw === adminPassword) {
-        reservedSpots = reservedSpots.filter(r => r.id !== id);
-        renderConfirmed();
-        renderReserved();
-        updateCounts();
-      } else {
-        alert("Incorrect password.");
-      }
-    }
-
-    function renderReserved() {
-      const ul = document.getElementById("reserved");
-      ul.innerHTML = '';
-      reservedSpots.forEach(entry => {
-        const li = document.createElement("li");
-        li.innerHTML = `Reserved by <strong>${entry.by}</strong> <button onclick="releaseSpot(${entry.id}, '${entry.by}')">Release</button>`;
-        ul.appendChild(li);
-      });
-    }
-
-    renderConfirmed();
-    renderReserved();
-    updateCounts();
-  </script>
 </body>
 </html>
 
