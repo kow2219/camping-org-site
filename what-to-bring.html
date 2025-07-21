@@ -42,6 +42,10 @@
       padding: 10px;
       margin-bottom: 10px;
     }
+    .readonly {
+      pointer-events: none;
+      opacity: 0.6;
+    }
   </style>
 </head>
 <body>
@@ -146,57 +150,71 @@
 
         const table = document.createElement("table");
         const thead = document.createElement("thead");
-        thead.innerHTML = `<tr><th>Item</th><th>Qty</th><th>Assigned To</th><th>Notes</th><th>Action</th></tr>`;
+        thead.innerHTML = `<tr><th>Item</th><th>Qty</th><th>Assigned To</th><th>Notes</th>${currentUser ? '<th>Action</th>' : ''}</tr>`;
         table.appendChild(thead);
 
         const tbody = document.createElement("tbody");
-        items.filter(i => i.category === cat).forEach(item => {
+        const filteredItems = items.filter(i => i.category === cat);
+        if (filteredItems.length === 0) {
+          const tr = document.createElement("tr");
+          const td = document.createElement("td");
+          td.colSpan = 5;
+          td.textContent = "No items yet.";
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+        }
+
+        filteredItems.forEach(item => {
           const tr = document.createElement("tr");
           const isUnassigned = !item.assignedTo || !item.quantity;
           if (isUnassigned) tr.className = "unassigned";
 
           tr.innerHTML = `
             <td>${item.name}</td>
-            <td contenteditable="true" onblur="updateField('${item.id}', 'quantity', this.textContent)">${item.quantity || ""}</td>
+            <td contenteditable=${currentUser ? '"true"' : '"false"'} onblur="updateField('${item.id}', 'quantity', this.textContent)">${item.quantity || ""}</td>
             <td>
-              <select onchange="updateField('${item.id}', 'assignedTo', this.value)">
+              <select onchange="updateField('${item.id}', 'assignedTo', this.value)" ${currentUser ? "" : "disabled"}>
                 <option value="">-- Unassigned --</option>
                 ${confirmedUsers.map(u => `<option value="${u.name}" ${item.assignedTo === u.name ? "selected" : ""}>${u.name}</option>`).join("")}
               </select>
             </td>
-            <td contenteditable="true" onblur="updateField('${item.id}', 'notes', this.textContent)">${item.notes || ""}</td>
-            <td><button onclick="deleteItem('${item.id}')">Delete</button></td>
+            <td contenteditable=${currentUser ? '"true"' : '"false"'} onblur="updateField('${item.id}', 'notes', this.textContent)">${item.notes || ""}</td>
+            ${currentUser ? `<td><button onclick="deleteItem('${item.id}')">Delete</button></td>` : ""}
           `;
           tbody.appendChild(tr);
         });
+
         table.appendChild(tbody);
         section.appendChild(table);
 
-        // Add new item form
-        const newRow = document.createElement("div");
-        newRow.innerHTML = `
-          <strong>New Item:</strong>
-          <input placeholder="Item name" id="new-${cat}-name">
-          <input placeholder="Quantity (optional)" id="new-${cat}-qty">
-          <input placeholder="Notes (optional)" id="new-${cat}-notes">
-          <select id="new-${cat}-assignee">
-            <option value="">-- Assign to --</option>
-            ${confirmedUsers.map(u => `<option value="${u.name}">${u.name}</option>`).join("")}
-          </select>
-          <button onclick="addItem('${cat}')">Add</button>
-        `;
-        section.appendChild(newRow);
+        if (currentUser) {
+          const newRow = document.createElement("div");
+          newRow.innerHTML = `
+            <strong>New Item:</strong>
+            <input placeholder="Item name" id="new-${cat}-name">
+            <input placeholder="Quantity (optional)" id="new-${cat}-qty">
+            <input placeholder="Notes (optional)" id="new-${cat}-notes">
+            <select id="new-${cat}-assignee">
+              <option value="">-- Assign to --</option>
+              ${confirmedUsers.map(u => `<option value="${u.name}">${u.name}</option>`).join("")}
+            </select>
+            <button onclick="addItem('${cat}')">Add</button>
+          `;
+          section.appendChild(newRow);
+        }
 
         container.appendChild(section);
       }
     }
 
     window.updateField = async (id, field, value) => {
+      if (!currentUser) return showLogin();
       await updateDoc(doc(itemsCol, id), { [field]: value });
       renderUI();
     };
 
     window.addItem = async (cat) => {
+      if (!currentUser) return showLogin();
       const name = document.getElementById(`new-${cat}-name`).value.trim();
       if (!name) return alert("Name required");
       const qty = document.getElementById(`new-${cat}-qty`).value.trim();
@@ -207,36 +225,39 @@
     };
 
     window.deleteItem = async (id) => {
+      if (!currentUser) return showLogin();
       await deleteDoc(doc(itemsCol, id));
       renderUI();
     };
 
     window.addCategoryPrompt = async () => {
       if (!currentUser) return showLogin();
-      const newCat = prompt("New category name:");
+      const newCat = prompt("New category name:").trim();
       if (newCat && newCat !== "Uncategorized") {
-        await setDoc(doc(categoriesCol, newCat), {});
+        const docRef = doc(categoriesCol, newCat);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) return alert("Category already exists.");
+        await setDoc(docRef, {});
         renderUI();
       }
     };
 
     window.deleteCategoryPrompt = async () => {
       if (!currentUser) return showLogin();
-      const cat = prompt("Category to delete:");
+      const cat = prompt("Category to delete:").trim();
       if (!cat || cat === "Uncategorized") return;
       await deleteDoc(doc(categoriesCol, cat));
-
-      // Move items to Uncategorized
       const snap = await getDocs(itemsCol);
-      snap.forEach(async d => {
+      for (const d of snap.docs) {
         if (d.data().category === cat) {
           await updateDoc(doc(itemsCol, d.id), { category: "Uncategorized" });
         }
-      });
+      }
       renderUI();
     };
 
     checkStoredLogin().then(renderUI);
+    window.attemptLogin = attemptLogin;
   </script>
 </body>
 </html>
