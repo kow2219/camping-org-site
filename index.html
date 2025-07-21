@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sequoia 2025 Camping Trip</title>
   <style>
     body {
@@ -28,10 +28,22 @@
     .section {
       margin-bottom: 20px;
     }
+    .tab-buttons button {
+      margin: 5px;
+    }
+    .tab {
+      display: none;
+    }
+    .tab.active {
+      display: block;
+    }
+    .highlight {
+      background-color: yellow;
+    }
   </style>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
-    import { getFirestore, collection, getDocs, setDoc, doc, addDoc, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+    import { getFirestore, collection, getDocs, setDoc, doc, addDoc, deleteDoc, getDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBjVDRsFLVowGVt3ZgLFzm7oZSdDORDSpI",
@@ -47,36 +59,25 @@
 
     const confirmedCol = collection(db, "confirmed");
     const reservedCol = collection(db, "reserved");
+    const categoriesCol = collection(db, "categories");
+    const itemsCol = collection(db, "items");
 
     const adminPassword = "admin123";
     const maxSpots = 12;
     let confirmedList = [];
     let reservedSpots = [];
+    let authenticatedUser = null;
 
     async function loadData() {
-      console.log("Loading data...");
-      try {
-        confirmedList = [];
-        reservedSpots = [];
-        const confirmedSnap = await getDocs(confirmedCol);
-        console.log("Confirmed docs count:", confirmedSnap.size);
-        confirmedSnap.forEach(doc => confirmedList.push(doc.data()));
-        const reservedSnap = await getDocs(reservedCol);
-        console.log("Reserved docs count:", reservedSnap.size);
-        reservedSnap.forEach(doc => reservedSpots.push({ ...doc.data(), id: doc.id }));
-        console.log("Data loaded, rendering UI");
-        renderConfirmed();
-        renderReserved();
-        updateCounts();
-      } catch (e) {
-        console.error("Error loading data:", e);
-      }
-    }
-
-    async function ensureKowshikInitial() {
-      console.log("Running ensureKowshikInitial");
-      await setDoc(doc(confirmedCol, "Kowshik"), { name: "Kowshik", password: adminPassword });
-      console.log("Kowshik doc ensured");
+      confirmedList = [];
+      reservedSpots = [];
+      const confirmedSnap = await getDocs(confirmedCol);
+      confirmedSnap.forEach(doc => confirmedList.push(doc.data()));
+      const reservedSnap = await getDocs(reservedCol);
+      reservedSnap.forEach(doc => reservedSpots.push({ ...doc.data(), id: doc.id }));
+      renderConfirmed();
+      renderReserved();
+      updateCounts();
     }
 
     function updateCounts() {
@@ -120,7 +121,7 @@
       });
     }
 
-    window.addConfirmed = async function addConfirmed() {
+    window.addConfirmed = async function () {
       const name = document.getElementById("newConfirmedName").value.trim();
       const pw = document.getElementById("newConfirmedPassword").value.trim();
       const ref = document.getElementById("referrerName").value.trim();
@@ -140,7 +141,7 @@
       await loadData();
     };
 
-    window.reserveSpot = async function reserveSpot() {
+    window.reserveSpot = async function () {
       const name = document.getElementById("reserverName").value.trim();
       const pw = document.getElementById("reserverPassword").value.trim();
       const user = confirmedList.find(u => u.name === name);
@@ -153,7 +154,7 @@
       await loadData();
     };
 
-    window.releaseSpot = async function releaseSpot(id, by) {
+    window.releaseSpot = async function (id, by) {
       const pw = prompt("Enter password (or admin password):");
       const user = confirmedList.find(u => u.name === by);
       if (pw === user?.password || pw === adminPassword) {
@@ -164,7 +165,9 @@
       }
     };
 
-    ensureKowshikInitial().then(loadData);
+    window.onload = () => {
+      loadData();
+    };
   </script>
 </head>
 <body>
@@ -186,31 +189,28 @@
      <strong>Spots Remaining:</strong> <span id="remaining-count">11</span>
   </p>
 
-  <div class="section">
-    <h2>Confirmed Attendees</h2>
-    <ul id="confirmed"></ul>
-
-    <input type="text" id="newConfirmedName" placeholder="New attendee name">
-
-    <input type="text" id="newConfirmedPassword" placeholder="Password">
-    <small style="display:block; color: gray; margin-bottom: 10px;">
-      * any simple password you'll remember. No need special characters.
-    </small>
-
-    <input type="text" id="referrerName" placeholder="Referred by (optional)">
-    <small style="display:block; color: gray; margin-bottom: 10px;">
-      * to automatically release a spot your friend held for you.
-    </small>
-
-    <button onclick="addConfirmed()">Signup</button>
+  <div class="tab-buttons">
+    <button onclick="document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));document.getElementById('signupTab').classList.add('active');">Signup</button>
+    <button onclick="window.location.href='what-to-bring.html'">What to Bring</button>
   </div>
 
-  <div class="section">
-    <h2>Reserve a spot for a friend(s)</h2>
-    <input type="text" id="reserverName" placeholder="Your (confirmed) name">
-    <input type="text" id="reserverPassword" placeholder="Password">
-    <button onclick="reserveSpot()">Reserve a Spot</button>
-    <ul id="reserved"></ul>
+  <div id="signupTab" class="tab active">
+    <div class="section">
+      <h2>Confirmed Attendees</h2>
+      <ul id="confirmed"></ul>
+      <input type="text" id="newConfirmedName" placeholder="New attendee name">
+      <input type="text" id="newConfirmedPassword" placeholder="Password">
+      <input type="text" id="referrerName" placeholder="Referred by (optional)">
+      <button onclick="addConfirmed()">Signup</button>
+    </div>
+
+    <div class="section">
+      <h2>Reserve a spot for a friend(s)</h2>
+      <input type="text" id="reserverName" placeholder="Your (confirmed) name">
+      <input type="text" id="reserverPassword" placeholder="Password">
+      <button onclick="reserveSpot()">Reserve a Spot</button>
+      <ul id="reserved"></ul>
+    </div>
   </div>
 </body>
 </html>
