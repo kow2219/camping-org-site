@@ -68,6 +68,15 @@
       display: inline-block;
       vertical-align: middle;
     }
+    /* New fix: Limit Add New Item "Assign to" dropdown */
+    #newItemAssignee {
+      max-width: 160px; /* approx 20 characters */
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: inline-block;
+      vertical-align: middle;
+    }
     .readonly {
       pointer-events: none;
       opacity: 0.6;
