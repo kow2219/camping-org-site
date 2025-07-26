@@ -72,6 +72,22 @@
       pointer-events: none;
       opacity: 0.6;
     }
+    /* Style the new item form */
+    #addItemForm {
+      margin-bottom: 30px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background-color: #fafafa;
+      max-width: 900px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    #addItemForm input,
+    #addItemForm select {
+      margin-right: 10px;
+      min-width: 120px;
+    }
   </style>
 </head>
 <body>
@@ -89,10 +105,24 @@
   </div>
 
   <div id="mainUI" style="display:none;">
-    <div style="text-align:right">
+    <div style="text-align:right; margin-bottom:10px;">
       <button onclick="addCategoryPrompt()">Add Category</button>
       <button onclick="deleteCategoryPrompt()">Delete Category</button>
     </div>
+
+    <!-- New single Add Item Form -->
+    <div id="addItemForm" style="display:none;">
+      <h3>Add New Item</h3>
+      <input id="newItemName" placeholder="Item name" required />
+      <input id="newItemQty" placeholder="Quantity (optional)" />
+      <input id="newItemNotes" placeholder="Notes (optional)" />
+      <select id="newItemCategory"></select>
+      <select id="newItemAssignee">
+        <option value="">-- Assign to --</option>
+      </select>
+      <button id="addNewItemBtn">Add</button>
+    </div>
+
     <div id="categoriesContainer"></div>
   </div>
 
@@ -130,6 +160,7 @@
 
     function enableUI() {
       document.getElementById("mainUI").style.display = "block";
+      document.getElementById("addItemForm").style.display = "block";
     }
 
     async function attemptLogin() {
@@ -175,6 +206,26 @@
       const container = document.getElementById("categoriesContainer");
       container.innerHTML = "";
 
+      // Populate category dropdown for add new item
+      const categorySelect = document.getElementById("newItemCategory");
+      categorySelect.innerHTML = "";
+      categories.forEach(cat => {
+        const opt = document.createElement("option");
+        opt.value = cat;
+        opt.textContent = cat;
+        categorySelect.appendChild(opt);
+      });
+
+      // Populate assignee dropdown for add new item
+      const assigneeSelect = document.getElementById("newItemAssignee");
+      assigneeSelect.innerHTML = '<option value="">-- Assign to --</option>';
+      confirmedUsers.forEach(u => {
+        const opt = document.createElement("option");
+        opt.value = u.name;
+        opt.textContent = u.name;
+        assigneeSelect.appendChild(opt);
+      });
+
       for (const cat of categories) {
         const section = document.createElement("div");
         section.className = "category-section";
@@ -219,22 +270,6 @@
         table.appendChild(tbody);
         section.appendChild(table);
 
-        if (currentUser) {
-          const newRow = document.createElement("div");
-          newRow.innerHTML = `
-            <strong>New Item:</strong>
-            <input placeholder="Item name" id="new-${cat}-name">
-            <input placeholder="Quantity (optional)" id="new-${cat}-qty">
-            <input placeholder="Notes (optional)" id="new-${cat}-notes">
-            <select id="new-${cat}-assignee">
-              <option value="">-- Assign to --</option>
-              ${confirmedUsers.map(u => `<option value="${u.name}">${u.name}</option>`).join("")}
-            </select>
-            <button onclick="addItem('${cat}')">Add</button>
-          `;
-          section.appendChild(newRow);
-        }
-
         container.appendChild(section);
       }
     }
@@ -245,15 +280,30 @@
       renderUI();
     };
 
-    window.addItem = async (cat) => {
+    document.getElementById("addNewItemBtn").onclick = async () => {
       if (!currentUser) return showLogin();
-      const name = document.getElementById(`new-${cat}-name`).value.trim();
-      if (!name) return alert("Name required");
-      const qty = document.getElementById(`new-${cat}-qty`).value.trim();
-      const assignee = document.getElementById(`new-${cat}-assignee`).value;
-      const notes = document.getElementById(`new-${cat}-notes`).value.trim();
-      await addDoc(itemsCol, { name, quantity: qty, assignedTo: assignee, notes, category: cat });
+      const name = document.getElementById("newItemName").value.trim();
+      if (!name) {
+        alert("Item name is required");
+        return;
+      }
+      const qty = document.getElementById("newItemQty").value.trim();
+      const notes = document.getElementById("newItemNotes").value.trim();
+      const category = document.getElementById("newItemCategory").value;
+      const assignee = document.getElementById("newItemAssignee").value;
+
+      await addDoc(itemsCol, { name, quantity: qty, notes, category, assignedTo: assignee });
+      document.getElementById("newItemName").value = "";
+      document.getElementById("newItemQty").value = "";
+      document.getElementById("newItemNotes").value = "";
+      document.getElementById("newItemAssignee").value = "";
       renderUI();
+    };
+
+    window.addItem = async (cat) => {
+      // This is no longer used, but kept for backward compatibility if needed
+      if (!currentUser) return showLogin();
+      alert("Please use the main 'Add New Item' form.");
     };
 
     window.deleteItem = async (id) => {
