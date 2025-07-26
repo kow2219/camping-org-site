@@ -261,7 +261,9 @@
           `;
 
           tr.innerHTML = `
-            <td>${item.name}</td>
+   	    <td>
+              <input type="text" value="${item.name}" onchange="updateField('${item.id}', 'name', this.value)">
+	    </td>
             <td contenteditable=${currentUser ? '"true"' : '"false"'} onblur="updateField('${item.id}', 'quantity', this.textContent)">${item.quantity || ""}</td>
             <td>
               <select onchange="updateField('${item.id}', 'assignedTo', this.value)" ${currentUser ? "" : "disabled"}>
