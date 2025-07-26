@@ -68,15 +68,6 @@
       display: inline-block;
       vertical-align: middle;
     }
-    /* New fix: Limit Add New Item "Assign to" dropdown */
-    #newItemAssignee {
-      max-width: 160px; /* approx 20 characters */
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      display: inline-block;
-      vertical-align: middle;
-    }
     .readonly {
       pointer-events: none;
       opacity: 0.6;
@@ -157,6 +148,7 @@
 
     let currentUser = null;
     let confirmedUsers = [];
+    let currentCategories = [];
 
     async function fetchConfirmedUsers() {
       const snap = await getDocs(confirmedCol);
@@ -184,7 +176,7 @@
         localStorage.setItem("bringPass", password);
         document.getElementById("authPrompt").style.display = "none";
         enableUI();
-        renderUI();
+        await renderUI();
       }
     }
     window.attemptLogin = attemptLogin;
@@ -205,10 +197,10 @@
       const catSnap = await getDocs(categoriesCol);
       const itemSnap = await getDocs(itemsCol);
 
-      let categories = catSnap.docs.map(d => d.id);
-      if (!categories.includes("Uncategorized")) {
+      currentCategories = catSnap.docs.map(d => d.id);
+      if (!currentCategories.includes("Uncategorized")) {
         await setDoc(doc(categoriesCol, "Uncategorized"), {});
-        categories.push("Uncategorized");
+        currentCategories.push("Uncategorized");
       }
 
       const items = itemSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -218,7 +210,7 @@
       // Populate category dropdown for add new item
       const categorySelect = document.getElementById("newItemCategory");
       categorySelect.innerHTML = "";
-      categories.forEach(cat => {
+      currentCategories.forEach(cat => {
         const opt = document.createElement("option");
         opt.value = cat;
         opt.textContent = cat;
@@ -235,7 +227,7 @@
         assigneeSelect.appendChild(opt);
       });
 
-      for (const cat of categories) {
+      for (const cat of currentCategories) {
         const section = document.createElement("div");
         section.className = "category-section";
         section.innerHTML = `<h3>${cat}</h3>`;
@@ -261,6 +253,12 @@
           const isUnassigned = !confirmedUsers.find(u => u.name === item.assignedTo) || !item.assignedTo || !item.quantity;
           if (isUnassigned) tr.className = "unassigned";
 
+          // Create the Action cell content: either buttons or move dropdown if editing
+          let actionContent = `
+            <button onclick="promptMoveCategory('${item.id}', '${item.category}')">Move</button>
+            <button onclick="deleteItem('${item.id}')">Delete</button>
+          `;
+
           tr.innerHTML = `
             <td>${item.name}</td>
             <td contenteditable=${currentUser ? '"true"' : '"false"'} onblur="updateField('${item.id}', 'quantity', this.textContent)">${item.quantity || ""}</td>
@@ -271,7 +269,7 @@
               </select>
             </td>
             <td contenteditable=${currentUser ? '"true"' : '"false"'} onblur="updateField('${item.id}', 'notes', this.textContent)">${item.notes || ""}</td>
-            ${currentUser ? `<td><button onclick="deleteItem('${item.id}')">Delete</button></td>` : ""}
+            ${currentUser ? `<td id="action-cell-${item.id}">${actionContent}</td>` : ""}
           `;
           tbody.appendChild(tr);
         });
@@ -282,6 +280,57 @@
         container.appendChild(section);
       }
     }
+
+    // Called when user clicks "Move" button on an item
+    window.promptMoveCategory = (itemId, currentCategory) => {
+      if (!currentUser) return showLogin();
+
+      const actionCell = document.getElementById(`action-cell-${itemId}`);
+      if (!actionCell) return;
+
+      // Create dropdown excluding current category
+      const otherCategories = currentCategories.filter(cat => cat !== currentCategory);
+      let dropdownHTML = `<select id="move-category-select-${itemId}">`;
+      otherCategories.forEach(cat => {
+        dropdownHTML += `<option value="${cat}">${cat}</option>`;
+      });
+      dropdownHTML += `</select>`;
+
+      // Save and Cancel buttons
+      dropdownHTML += `
+        <button onclick="saveMoveCategory('${itemId}', '${currentCategory}')">Save</button>
+        <button onclick="cancelMoveCategory('${itemId}', '${currentCategory}')">Cancel</button>
+      `;
+
+      actionCell.innerHTML = dropdownHTML;
+    };
+
+    // Save the moved category
+    window.saveMoveCategory = async (itemId, oldCategory) => {
+      const select = document.getElementById(`move-category-select-${itemId}`);
+      if (!select) return;
+
+      const newCategory = select.value;
+      if (newCategory === oldCategory) {
+        alert("Please select a different category.");
+        return;
+      }
+
+      await updateDoc(doc(itemsCol, itemId), { category: newCategory });
+      renderUI();
+    };
+
+    // Cancel moving category, restore original buttons
+    window.cancelMoveCategory = (itemId, currentCategory) => {
+      const actionCell = document.getElementById(`action-cell-${itemId}`);
+      if (!actionCell) return;
+
+      const originalContent = `
+        <button onclick="promptMoveCategory('${itemId}', '${currentCategory}')">Move</button>
+        <button onclick="deleteItem('${itemId}')">Delete</button>
+      `;
+      actionCell.innerHTML = originalContent;
+    };
 
     window.updateField = async (id, field, value) => {
       if (!currentUser) return showLogin();
