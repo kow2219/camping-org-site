@@ -22,8 +22,9 @@
     button {
       margin-left: 10px;
     }
-    input[type="text"] {
+    input[type="text"], select {
       margin-right: 10px;
+      padding: 5px;
     }
     .section {
       margin-bottom: 20px;
@@ -59,14 +60,11 @@
 
     const confirmedCol = collection(db, "confirmed");
     const reservedCol = collection(db, "reserved");
-    const categoriesCol = collection(db, "categories");
-    const itemsCol = collection(db, "items");
 
     const adminPassword = "admin123";
     const maxSpots = 12;
     let confirmedList = [];
     let reservedSpots = [];
-    let authenticatedUser = null;
 
     async function loadData() {
       confirmedList = [];
@@ -77,7 +75,33 @@
       reservedSnap.forEach(doc => reservedSpots.push({ ...doc.data(), id: doc.id }));
       renderConfirmed();
       renderReserved();
+      populateDropdowns();
       updateCounts();
+    }
+
+    function truncateName(name) {
+      return name.length > 20 ? name.slice(0, 20) + "..." : name;
+    }
+
+    function populateDropdowns() {
+      const referrerSelect = document.getElementById("referrerName");
+      const reserverSelect = document.getElementById("reserverName");
+
+      referrerSelect.innerHTML = `<option value="">Referred by (optional)</option>`;
+      reserverSelect.innerHTML = `<option value="">Select your name</option>`;
+
+      confirmedList.forEach(({ name }) => {
+        const truncated = truncateName(name);
+        const opt1 = document.createElement("option");
+        opt1.value = name;
+        opt1.textContent = truncated;
+        referrerSelect.appendChild(opt1);
+
+        const opt2 = document.createElement("option");
+        opt2.value = name;
+        opt2.textContent = truncated;
+        reserverSelect.appendChild(opt2);
+      });
     }
 
     function updateCounts() {
@@ -124,7 +148,7 @@
     window.addConfirmed = async function () {
       const name = document.getElementById("newConfirmedName").value.trim();
       const pw = document.getElementById("newConfirmedPassword").value.trim();
-      const ref = document.getElementById("referrerName").value.trim();
+      const ref = document.getElementById("referrerName").value;
       if (!name || !pw) return alert("Enter name and password.");
       if (confirmedList.find(u => u.name === name)) return alert("Already signed up.");
       if (ref) {
@@ -142,7 +166,7 @@
     };
 
     window.reserveSpot = async function () {
-      const name = document.getElementById("reserverName").value.trim();
+      const name = document.getElementById("reserverName").value;
       const pw = document.getElementById("reserverPassword").value.trim();
       const user = confirmedList.find(u => u.name === name);
       if (!user) return alert("You must be a confirmed attendee.");
@@ -200,13 +224,13 @@
       <ul id="confirmed"></ul>
       <input type="text" id="newConfirmedName" placeholder="New attendee name">
       <input type="text" id="newConfirmedPassword" placeholder="Password">
-      <input type="text" id="referrerName" placeholder="Referred by (optional)">
+      <select id="referrerName"></select>
       <button onclick="addConfirmed()">Signup</button>
     </div>
 
     <div class="section">
       <h2>Reserve a spot for a friend(s)</h2>
-      <input type="text" id="reserverName" placeholder="Your (confirmed) name">
+      <select id="reserverName"></select>
       <input type="text" id="reserverPassword" placeholder="Password">
       <button onclick="reserveSpot()">Reserve a Spot</button>
       <ul id="reserved"></ul>
