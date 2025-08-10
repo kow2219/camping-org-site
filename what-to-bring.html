@@ -1,3 +1,4 @@
+<!-- Baseline for what-to-bring.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -50,18 +51,17 @@
       font-size: 1rem;
       font-family: inherit;
     }
-    /* Fix: Limit Assigned To select width and truncate overflow */
     td select {
-      max-width: 160px; /* approx 20 characters */
+      max-width: 160px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       display: block;
       box-sizing: border-box;
     }
-    /* Also limit new item assignee and category select width */
     div.category-section select,
-    #addItemForm select {
+    #addItemForm select,
+    #loginName {
       max-width: 160px;
       white-space: nowrap;
       overflow: hidden;
@@ -73,7 +73,6 @@
       pointer-events: none;
       opacity: 0.6;
     }
-    /* Style the new item form */
     #addItemForm {
       margin-bottom: 30px;
       padding: 10px;
@@ -89,19 +88,18 @@
       margin-right: 10px;
       min-width: 120px;
     }
-  /* NEW STYLE for editable Item Name field */
-  td input[type="text"] {
-    border: none;
-    background: transparent;
-    font-family: inherit;
-    font-size: 14px;
-    width: 100%;
-    box-sizing: border-box;
-  }
-  td input[type="text"]:focus {
-    outline: none;
-    background: #f9f9f9;
-  }
+    td input[type="text"] {
+      border: none;
+      background: transparent;
+      font-family: inherit;
+      font-size: 14px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    td input[type="text"]:focus {
+      outline: none;
+      background: #f9f9f9;
+    }
   </style>
 </head>
 <body>
@@ -112,7 +110,9 @@
   </nav>
 
   <div id="authPrompt" style="text-align:center; display:none;">
-    <input type="text" id="loginName" placeholder="Your name" />
+    <select id="loginName">
+      <option value="">-- Select your name --</option>
+    </select>
     <input type="password" id="loginPassword" placeholder="Password" />
     <button onclick="attemptLogin()">Login</button>
     <p id="loginError" style="color:red;"></p>
@@ -124,7 +124,6 @@
       <button onclick="deleteCategoryPrompt()">Delete Category</button>
     </div>
 
-    <!-- New single Add Item Form -->
     <div id="addItemForm" style="display:none;">
       <h3>Add New Item</h3>
       <input id="newItemName" placeholder="Item name" required />
@@ -167,6 +166,15 @@
     async function fetchConfirmedUsers() {
       const snap = await getDocs(confirmedCol);
       confirmedUsers = snap.docs.map(doc => doc.data());
+
+      const loginNameSelect = document.getElementById("loginName");
+      loginNameSelect.innerHTML = '<option value="">-- Select your name --</option>';
+      confirmedUsers.forEach(u => {
+        const opt = document.createElement("option");
+        opt.value = u.name;
+        opt.textContent = u.name.length > 22 ? u.name.slice(0, 20) + "…" : u.name;
+        loginNameSelect.appendChild(opt);
+      });
     }
 
     function showLogin() {
@@ -179,7 +187,7 @@
     }
 
     async function attemptLogin() {
-      const name = document.getElementById("loginName").value.trim();
+      const name = document.getElementById("loginName").value;
       const password = document.getElementById("loginPassword").value.trim();
       const user = confirmedUsers.find(u => u.name === name && u.password === password);
       if (!user) {
@@ -221,7 +229,6 @@
       const container = document.getElementById("categoriesContainer");
       container.innerHTML = "";
 
-      // Populate category dropdown for add new item
       const categorySelect = document.getElementById("newItemCategory");
       categorySelect.innerHTML = "";
       currentCategories.forEach(cat => {
@@ -230,8 +237,8 @@
         opt.textContent = cat;
         categorySelect.appendChild(opt);
       });
+      categorySelect.value = "Uncategorized";
 
-      // Populate assignee dropdown for add new item
       const assigneeSelect = document.getElementById("newItemAssignee");
       assigneeSelect.innerHTML = '<option value="">-- Assign to --</option>';
       confirmedUsers.forEach(u => {
@@ -267,7 +274,6 @@
           const isUnassigned = !confirmedUsers.find(u => u.name === item.assignedTo) || !item.assignedTo || !item.quantity;
           if (isUnassigned) tr.className = "unassigned";
 
-          // Create the Action cell content: either buttons or move dropdown if editing
           let actionContent = `
             <button onclick="promptMoveCategory('${item.id}', '${item.category}')">Move</button>
             <button onclick="deleteItem('${item.id}')">Delete</button>
@@ -297,50 +303,39 @@
       }
     }
 
-    // Called when user clicks "Move" button on an item
     window.promptMoveCategory = (itemId, currentCategory) => {
       if (!currentUser) return showLogin();
-
       const actionCell = document.getElementById(`action-cell-${itemId}`);
       if (!actionCell) return;
 
-      // Create dropdown excluding current category
       const otherCategories = currentCategories.filter(cat => cat !== currentCategory);
       let dropdownHTML = `<select id="move-category-select-${itemId}">`;
       otherCategories.forEach(cat => {
         dropdownHTML += `<option value="${cat}">${cat}</option>`;
       });
       dropdownHTML += `</select>`;
-
-      // Save and Cancel buttons
       dropdownHTML += `
         <button onclick="saveMoveCategory('${itemId}', '${currentCategory}')">Save</button>
         <button onclick="cancelMoveCategory('${itemId}', '${currentCategory}')">Cancel</button>
       `;
-
       actionCell.innerHTML = dropdownHTML;
     };
 
-    // Save the moved category
     window.saveMoveCategory = async (itemId, oldCategory) => {
       const select = document.getElementById(`move-category-select-${itemId}`);
       if (!select) return;
-
       const newCategory = select.value;
       if (newCategory === oldCategory) {
         alert("Please select a different category.");
         return;
       }
-
       await updateDoc(doc(itemsCol, itemId), { category: newCategory });
       renderUI();
     };
 
-    // Cancel moving category, restore original buttons
     window.cancelMoveCategory = (itemId, currentCategory) => {
       const actionCell = document.getElementById(`action-cell-${itemId}`);
       if (!actionCell) return;
-
       const originalContent = `
         <button onclick="promptMoveCategory('${itemId}', '${currentCategory}')">Move</button>
         <button onclick="deleteItem('${itemId}')">Delete</button>
@@ -357,27 +352,21 @@
     document.getElementById("addNewItemBtn").onclick = async () => {
       if (!currentUser) return showLogin();
       const name = document.getElementById("newItemName").value.trim();
-      if (!name) {
-        alert("Item name is required");
-        return;
-      }
+      if (!name) return alert("Item name is required");
+
       const qty = document.getElementById("newItemQty").value.trim();
       const notes = document.getElementById("newItemNotes").value.trim();
       const category = document.getElementById("newItemCategory").value;
       const assignee = document.getElementById("newItemAssignee").value;
 
       await addDoc(itemsCol, { name, quantity: qty, notes, category, assignedTo: assignee });
+
       document.getElementById("newItemName").value = "";
       document.getElementById("newItemQty").value = "";
       document.getElementById("newItemNotes").value = "";
       document.getElementById("newItemAssignee").value = "";
-      renderUI();
-    };
 
-    window.addItem = async (cat) => {
-      // This is no longer used, but kept for backward compatibility if needed
-      if (!currentUser) return showLogin();
-      alert("Please use the main 'Add New Item' form.");
+      renderUI();
     };
 
     window.deleteItem = async (id) => {
